@@ -16,16 +16,8 @@
 #		* motionEye motion detection																									   #
 # 		* script intended for use on motionEyeOS running on RPI4																		   #
 #																																		   #
-# * I have found in my setup a few random things:																						   #
-#																																		   #
-# 	1. When using motionEye format 'H264' the video tends to ends prematurely... I have found the MPEG4 (.avi) to be the most reliable.    #
-# 	2. MPE4 (.avi) has the downsides of a) large files b) you can't stream recorded movies straight from the motionEye web interface / app #
-# 	3. Therefore, what I'm currently trialing is; use .avi but then re-encode and compress to mp4 with ffmpeg. Hence the below variable    #
-																																		   #
-outputfiletype=".mp4"																													   #
-																																		   #
-#	4. I'm not sure how this works with multiple cameras. Probably best use seperate scripts for each device, or use / modifie the script  #
-#	   from DeadEnded who has taken this into account: https://github.com/DeadEnded/MotionEyeAudio                                         #																								   #	
+# * I'm not sure how this works with multiple cameras. Probably best use seperate scripts for each device, or use / modifie the script     #																																		   #
+#	from DeadEnded who has taken this into account: https://github.com/DeadEnded/MotionEyeAudio                                            #																								   #	
 #																																		   #
 # !!USAGE!!																																   #
 # 																																	       #
@@ -41,9 +33,10 @@ outputfiletype=".mp4"																													   #
 operation=$1 								# Bash script input argument
 outputcamerafolder=/data/output/Camera1 	# Typical of motionEyeOS
 tempaudiofolder=/tmp 						# Needs to be writable folder
-audiodelay=2000 							# milliseconds: Audio delay: used to sync audio and video
-compress=true								# true = Re-encode and compress video, false = Don't re-encode and compress
+audiodelay=22200 							# milliseconds: Audio delay: used to sync audio and video
+compress=false								# true = Re-encode and compress video, false = Don't re-encode and compress
 subfolder=$(date +'%Y-%m-%d')				# Sub-folder date format
+outputfiletype=".mp4"	
 
 # Stop any active instance of arecord
 if pidof arecord > /dev/null
@@ -56,9 +49,7 @@ case ${operation} in
     start) # Start recording audio		 		
 		arecord --device=hw:1,0 --format S16_LE --rate 44100 -c1 $tempaudiofolder/recaudio.wav -V mono
 	;;
-	
-	# *** Add other case options here, if required ***
-	
+
 	*)
 		mv $tempaudiofolder/recaudio.wav $tempaudiofolder/processaudio.wav
 		
@@ -68,26 +59,22 @@ case ${operation} in
 
 		# To sync audio with video - In my case: add 2 seconds of silence before the audio stream
 		ffmpeg -i $tempaudiofolder/processaudio.wav -af "adelay=$audiodelay|$audiodelay" $tempaudiofolder/readyaudio.wav			
-		rm $tempaudiofolder/processaudio.wav || true
-		
-		# Merge audio and video streams into 1 file
-		ffmpeg -y -i $videopath -i $tempaudiofolder/readyaudio.wav -c copy -shortest $outputcamerafolder/$subfolder/temp_$videofilename			
-		rm $tempaudiofolder/readyaudio.wav || true	
+		rm $tempaudiofolder/processaudio.wav || true	
 		
 		# Not highly tested. May issues in the long run, as this process takes a good few seconds to run
 		case ${compress} in
 			true) 	 		
-				ffmpeg -y -i $outputcamerafolder/$subfolder/temp_$videofilename -vcodec libx264 -crf 24 $outputcamerafolder/$subfolder/temp2_$outputfilename
-				rm $outputcamerafolder/$subfolder/$videofilename || true	
-				rm $outputcamerafolder/$subfolder/temp_$videofilename || true
-				mv $outputcamerafolder/$subfolder/temp2_$outputfilename $outputcamerafolder/$subfolder/$outputfilename
-			;;			
-			
-			*)
-				rm $outputcamerafolder/$subfolder/$videofilename || true		
-				mv $outputcamerafolder/$subfolder/temp_$videofilename $outputcamerafolder/$subfolder/$videofilename		
-			;;
-		esac		
+				ffmpeg -y -i $videopath -i $tempaudiofolder/readyaudio.wav -c:v libx264 -crf 24 -preset medium -c:a aac -b:a 128k -shortest $outputcamerafolder/$subfolder/temp_$videofilename
+		 ;;			
+		
+		*)
+				ffmpeg -y -i $videopath -i $tempaudiofolder/readyaudio.wav -c:v copy -c:a aac -shortest $outputcamerafolder/$subfolder/temp_$videofilename		
+		;;
+		esac	
+
+		rm $tempaudiofolder/readyaudio.wav || true		
+		rm $outputcamerafolder/$subfolder/$videofilename || true		
+		mv $outputcamerafolder/$subfolder/temp_$videofilename $outputcamerafolder/$subfolder/$videofilename				
 	;;
 esac
 
