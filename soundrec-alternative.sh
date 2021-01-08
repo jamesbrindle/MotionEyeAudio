@@ -31,10 +31,10 @@
 
 # Variables
 operation=$1 								# Bash script input argument
-outputcamerafolder=/data/output/Camera1 	# Typical of motionEyeOS
-tempaudiofolder=/tmp 						# Needs to be writable folder
-audiodelay=22200 							# milliseconds: Audio delay: used to sync audio and video
-compress=false								# true = Re-encode and compress video, false = Don't re-encode and compress
+outputcamerafolder="/data/output/Camera1" 	# Typical of motionEyeOS
+tempaudiofolder="/tmp" 						# Needs to be writable folder
+audiodelay=2200 							# milliseconds: Audio delay: used to sync audio and video
+compress=true								# true = Re-encode and compress video, false = Don't re-encode and compress
 subfolder=$(date +'%Y-%m-%d')				# Sub-folder date format
 outputfiletype=".mp4"	
 
