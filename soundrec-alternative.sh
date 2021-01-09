@@ -31,48 +31,58 @@
 
 # Variables
 operation=$1 								# Bash script input argument
-outputcamerafolder="/data/output/Camera1" 	# Typical of motionEyeOS
+outputcamerafolder="/data/output/Camera2" 	# Typical of motionEyeOS
 tempaudiofolder="/tmp" 						# Needs to be writable folder
 audiodelay=2200 							# milliseconds: Audio delay: used to sync audio and video
 compress=true								# true = Re-encode and compress video, false = Don't re-encode and compress
 subfolder=$(date +'%Y-%m-%d')				# Sub-folder date format
-outputfiletype=".mp4"	
+outputfiletype=".mp4"
 
-# Stop any active instance of arecord
 if pidof arecord > /dev/null
 then
 	# -2 = Interrupt (not 'terminate') arecord process, as arecord utilises traping STDINT()
 	kill -2 `pidof arecord`
 fi
 
+nowfile="/tmp/now.tmp"
+
 case ${operation} in
-    start) # Start recording audio		 		
-		arecord --device=hw:1,0 --format S16_LE --rate 44100 -c1 $tempaudiofolder/recaudio.wav -V mono
+    start) # Start recording audio		
+		now=`date '+%Y_%m_%d__%H_%M_%S'`.wav
+		echo $now > $nowfile
+		
+		recaudio="recaudio_$now"			
+		arecord --device=hw:1,0 --format S16_LE --rate 44100 -c1 $tempaudiofolder/$recaudio -V mono
 	;;
 
 	*)
-		mv $tempaudiofolder/recaudio.wav $tempaudiofolder/processaudio.wav
+		now=`cat $nowfile`
+		recaudio="recaudio_$now"
+		processaudio="processaudio_$now"
+		readyaudio="readyaudio_$now"
+	
+		mv $tempaudiofolder/$recaudio $tempaudiofolder/$processaudio
 		
 		videopath=$1
 		videofilename=$(basename -- "$videopath")
 		outputfilename=${videofilename/.avi/$outputfiletype}
 
 		# To sync audio with video - In my case: add 2 seconds of silence before the audio stream
-		ffmpeg -i $tempaudiofolder/processaudio.wav -af "adelay=$audiodelay|$audiodelay" $tempaudiofolder/readyaudio.wav			
-		rm $tempaudiofolder/processaudio.wav || true	
+		ffmpeg -i $tempaudiofolder/$processaudio -af "adelay=$audiodelay|$audiodelay" $tempaudiofolder/$readyaudio		
+		rm $tempaudiofolder/$processaudio || true	
 		
 		# Not highly tested. May issues in the long run, as this process takes a good few seconds to run
 		case ${compress} in
 			true) 	 		
-				ffmpeg -y -i $videopath -i $tempaudiofolder/readyaudio.wav -c:v libx264 -crf 24 -preset medium -c:a aac -b:a 128k -shortest $outputcamerafolder/$subfolder/temp_$videofilename
+				ffmpeg -y -i $videopath -i $tempaudiofolder/$readyaudio -c:v libx264 -crf 24 -preset medium -c:a aac -b:a 128k -shortest $outputcamerafolder/$subfolder/temp_$videofilename
 		 ;;			
 		
 		*)
-				ffmpeg -y -i $videopath -i $tempaudiofolder/readyaudio.wav -c:v copy -c:a aac -shortest $outputcamerafolder/$subfolder/temp_$videofilename		
+				ffmpeg -y -i $videopath -i $tempaudiofolder/$readyaudio -c:v copy -c:a aac -shortest $outputcamerafolder/$subfolder/temp_$videofilename		
 		;;
 		esac	
 
-		rm $tempaudiofolder/readyaudio.wav || true		
+		rm $tempaudiofolder/$readyaudio || true		
 		rm $outputcamerafolder/$subfolder/$videofilename || true		
 		mv $outputcamerafolder/$subfolder/temp_$videofilename $outputcamerafolder/$subfolder/$videofilename				
 	;;
